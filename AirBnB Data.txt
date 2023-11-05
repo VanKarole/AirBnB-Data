@@ -1,0 +1,83 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Užkrauna CSV failą į DataFrame
+df_listings = pd.read_csv("C:\\Users\\Lenovo\\biod2023\\exam\\K2\\listings.csv")
+df_reviews = pd.read_csv("C:\\Users\\Lenovo\\biod2023\\exam\\K2\\reviews.csv")
+
+# Paverčia 'price' stulpelio reikšmes iš teksto į skaičių (šalina $ ir kablelius)
+df['price'] = df['price'].replace('[\$,]', '', regex=True).astype(float)
+
+# Sugrupuoja pagal host_id, kad suskaičiuotų skelbimų skaičių ir bendrą pelną
+grouped = df.groupby('host_id').agg(num_of_listings=('id', 'size'), total_profit=('price', 'sum'), is_superhost=('host_is_superhost', 'first'))
+
+# Surūšiuoja pagal skelbimų skaičių ir bendrą pelną
+sorted_hosts = grouped.sort_values(by=['num_of_listings', 'total_profit'], ascending=[False, False])
+
+# Skelbimus kategorizuoja kaip kasdieninius, savaitinius ar mėnesinius
+df['rental_type'] = 'daily'
+df.loc[(df['minimum_nights'] >= 7) & (df['maximum_nights'] < 30), 'rental_type'] = 'weekly'
+df.loc[df['minimum_nights'] >= 30, 'rental_type'] = 'monthly'
+
+# Skaičiuoja vidutinę kainą kiekvienai kategorijai
+average_prices = df.groupby('rental_type')['price'].mean()
+
+# Skaičiuoja vidutinę kainą pagal įvertinimų balus
+review_scores_columns = ['review_scores_location', 'review_scores_cleanliness']
+average_prices_by_scores = df.groupby(review_scores_columns)['price'].mean().unstack()
+
+# Nustato superhostus ir jų dalį visų šeimininkų tarp
+superhosts = grouped[grouped['is_superhost'] == 't']
+proportion_superhosts = len(superhosts) / len(grouped)
+
+# Randama ilgiausia apžvalga iš reviews.csv
+longest_review_idx = df_reviews['comments'].dropna().str.len().idxmax()
+longest_review_text = df_reviews.loc[longest_review_idx, 'comments']
+
+# Sugrupuoja pagal listing_id ir suskaičiuoja komentarus
+grouped_reviews = df_reviews.groupby('listing_id').size().reset_index(name='num_of_comments')
+
+# Randama skelbimas su daugiausiai komentarų
+max_comments_idx = grouped_reviews['num_of_comments'].idxmax()
+listing_with_most_comments = grouped_reviews.loc[max_comments_idx]
+
+# Gauna išsamios informacijos apie skelbimą iš df_listings
+listing_info = df_listings[df_listings['id'] == listing_with_most_comments['listing_id']]
+
+# Paverčia 'date' stulpelį į datos formatą
+df_reviews['date'] = pd.to_datetime(df_reviews['date'])
+
+# Sugrupuoja pagal datą ir suskaičiuoja komentarus
+datewise_reviews = df_reviews.groupby('date').size()
+
+# Piešia grafiką
+plt.figure(figsize=(12, 6))
+datewise_reviews.plot()
+plt.title('Komentarų (apžvalgų) skaičius laikui bėgant')
+plt.xlabel('Data')
+plt.ylabel('Komentarų skaičius')
+plt.tight_layout()
+plt.show()
+
+# Atspausdina rezultatus
+print("Top 10 šeimininkų:")
+print(sorted_hosts.head(10))
+print("\nVidutinės kainos skirtingiems nuomos tipams:")
+for rental, avg_price in average_prices.items():
+    print(f"{rental.capitalize()}: ${avg_price:.2f}")
+print("\nVidutinės kainos pagal įvertinimų balus:")
+print(average_prices_by_scores)
+print(f"\nSuperhostų dalis: {proportion_superhosts:.2%}")
+print(f"\nIlgiausia apžvalga:\n{longest_review_text}")
+print(f"\---------------------------------------------------------------")
+if not listing_info.empty:
+    print(f"Skelbimas su daugiausiai komentarų (ID: {listing_with_most_comments['listing_id']}):")
+    print(listing_info[['name', 'description', 'neighborhood_overview']])
+    print(f"Komentarų skaičius: {listing_with_most_comments['num_of_comments']}")
+else:
+    print(f"Skelbimas su ID: {listing_with_most_comments['listing_id']} turi daugiausiai komentarų ({listing_with_most_comments['num_of_comments']} komentarų), tačiau jo informacija nėra prieinama faile listings.csv.")
+
+print("Vidutinė kaina pagal kambario tipą:")
+print(avg_price_by_room)
+print(f"Aktyviausias recenzentas yra ID: {most_active_reviewer} su {number_of_reviews} apžvalgomis.")
+print(f"Yra {unique_hosts} unikalūs šeimininkai skelbimuose.")
